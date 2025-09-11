@@ -1,5 +1,12 @@
 package io.github.delirius325.jmeter.backendlistener.elasticsearch;
 
+import org.apache.jmeter.assertions.AssertionResult;
+import org.apache.jmeter.samplers.SampleResult;
+import org.apache.jmeter.threads.JMeterContextService;
+import org.apache.jmeter.visualizers.backend.BackendListenerContext;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.text.ParseException;
@@ -14,27 +21,20 @@ import java.util.LinkedList;
 import java.util.Map;
 import java.util.Set;
 
-import org.apache.jmeter.assertions.AssertionResult;
-import org.apache.jmeter.samplers.SampleResult;
-import org.apache.jmeter.threads.JMeterContextService;
-import org.apache.jmeter.visualizers.backend.BackendListenerContext;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import static org.apache.commons.lang3.math.NumberUtils.isCreatable;
 
 public class ElasticSearchMetric {
     private static final Logger logger = LoggerFactory.getLogger(ElasticSearchMetric.class);
     private static final String HOSTNAME = solveHostName();
 
-    private SampleResult sampleResult;
-    private String esTestMode;
-    private String esTimestamp;
-    private int ciBuildNumber;
-    private HashMap<String, Object> json;
-    private Set<String> fields;
-    private boolean allReqHeaders;
-    private boolean allResHeaders;
+    private final SampleResult sampleResult;
+    private final String esTestMode;
+    private final String esTimestamp;
+    private final int ciBuildNumber;
+    private final HashMap<String, Object> json;
+    private final Set<String> fields;
+    private final boolean allReqHeaders;
+    private final boolean allResHeaders;
 
     public ElasticSearchMetric(
             SampleResult sr, String testMode, String timeStamp, int buildNumber,

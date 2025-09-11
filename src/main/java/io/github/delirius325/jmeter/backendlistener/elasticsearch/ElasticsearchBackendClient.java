@@ -1,9 +1,10 @@
-    package io.github.delirius325.jmeter.backendlistener.elasticsearch;
+package io.github.delirius325.jmeter.backendlistener.elasticsearch;
 
-import java.util.*;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
-
+import com.amazonaws.auth.AWS4Signer;
+import com.amazonaws.auth.AWSCredentialsProvider;
+import com.amazonaws.auth.DefaultAWSCredentialsProviderChain;
+import com.amazonaws.http.AWSRequestSigningApacheInterceptor;
+import com.google.gson.Gson;
 import org.apache.commons.io.FilenameUtils;
 import org.apache.http.HttpHost;
 import org.apache.http.HttpRequestInterceptor;
@@ -20,11 +21,15 @@ import org.elasticsearch.client.RestClient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.amazonaws.auth.AWS4Signer;
-import com.amazonaws.auth.AWSCredentialsProvider;
-import com.amazonaws.auth.DefaultAWSCredentialsProviderChain;
-import com.amazonaws.http.AWSRequestSigningApacheInterceptor;
-import com.google.gson.Gson;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 public class ElasticsearchBackendClient extends AbstractBackendListenerClient {
 
@@ -56,6 +61,7 @@ public class ElasticsearchBackendClient extends AbstractBackendListenerClient {
     private static final Logger logger = LoggerFactory.getLogger(ElasticsearchBackendClient.class);
     private static final AWSCredentialsProvider credentialsProvider = new DefaultAWSCredentialsProviderChain();
     private static final Map<String, String> DEFAULT_ARGS = new LinkedHashMap<>();
+
     static {
         DEFAULT_ARGS.put(ES_SCHEME, "http");
         DEFAULT_ARGS.put(ES_HOST, null);
@@ -71,7 +77,7 @@ public class ElasticsearchBackendClient extends AbstractBackendListenerClient {
         DEFAULT_ARGS.put(ES_AUTH_PWD, "");
         DEFAULT_ARGS.put(ES_PARSE_REQ_HEADERS, "false");
         DEFAULT_ARGS.put(ES_PARSE_RES_HEADERS, "false");
-        DEFAULT_ARGS.put(ES_AWS_ENDPOINT,  "");
+        DEFAULT_ARGS.put(ES_AWS_ENDPOINT, "");
         DEFAULT_ARGS.put(ES_AWS_REGION, "");
         DEFAULT_ARGS.put(ES_SSL_TRUSTSTORE_PATH, "");
         DEFAULT_ARGS.put(ES_SSL_TRUSTSTORE_PW, "");
@@ -79,6 +85,7 @@ public class ElasticsearchBackendClient extends AbstractBackendListenerClient {
         DEFAULT_ARGS.put(ES_SSL_KEYSTORE_PW, "");
         DEFAULT_ARGS.put(ES_SSL_VERIFICATION_MODE, "full");
     }
+
     private ElasticSearchMetricSender sender;
     private Set<String> modes;
     private Set<String> filters;
@@ -99,6 +106,9 @@ public class ElasticsearchBackendClient extends AbstractBackendListenerClient {
 
     @Override
     public void setupTest(BackendListenerContext context) throws Exception {
+        // Log4J DEBUG log level is recognized by JMeter for this class i.g.d.j.b.e.ElasticsearchBackendClient
+        // jmeter_command+=" -L 'io.github.delirius325.jmeter.backendlistener=DEBUG'" but not INFO log level ?!?!
+        logger.debug("Execute setupTest using Elasticsearch at {}:///{}:{}", context.getParameter(ES_SCHEME), context.getParameter(ES_HOST), context.getParameter(ES_PORT));
         try {
             this.filters = new HashSet<>();
             this.fields = new HashSet<>();
@@ -107,7 +117,7 @@ public class ElasticsearchBackendClient extends AbstractBackendListenerClient {
             this.timeoutMs = Integer.parseInt((context.getParameter(ES_TIMEOUT_MS)));
             this.buildNumber = (JMeterUtils.getProperty(ElasticsearchBackendClient.BUILD_NUMBER) != null
                     && !JMeterUtils.getProperty(ElasticsearchBackendClient.BUILD_NUMBER).trim().equals(""))
-                            ? Integer.parseInt(JMeterUtils.getProperty(ElasticsearchBackendClient.BUILD_NUMBER)) : 0;
+                    ? Integer.parseInt(JMeterUtils.getProperty(ElasticsearchBackendClient.BUILD_NUMBER)) : 0;
 
             setSSLConfiguration(context);
 
@@ -117,14 +127,13 @@ public class ElasticsearchBackendClient extends AbstractBackendListenerClient {
                                 Integer.parseInt(context.getParameter(ES_PORT)), context.getParameter(ES_SCHEME)))
                         .setHttpClientConfigCallback(httpAsyncClientBuilder -> {
                             if (context.getParameter(ES_SSL_VERIFICATION_MODE).equalsIgnoreCase("none")) {
-                                logger.info("Will trust all remote SSL certificates.");
+                                logger.debug("Will trust all remote SSL certificates.");
                                 final SSLContextBuilder contextBuilder = new SSLContextBuilder();
                                 try {
                                     contextBuilder.loadTrustMaterial(TRUST_ALL_STRATEGY);
                                     httpAsyncClientBuilder.setSSLContext(contextBuilder.build());
                                     httpAsyncClientBuilder.setSSLHostnameVerifier(NoopHostnameVerifier.INSTANCE);
-                                }
-                                catch (Exception e) {
+                                } catch (Exception e) {
                                     // NOTE: purposedly ignored as this strategy does not use any custom algorithm
                                     // or certificate
                                 }
@@ -156,6 +165,7 @@ public class ElasticsearchBackendClient extends AbstractBackendListenerClient {
                     context.getParameter(ES_AUTH_USER), context.getParameter(ES_AUTH_PWD),
                     context.getParameter(ES_AWS_ENDPOINT));
             this.sender.createIndex();
+            logger.debug("Checking the Elasticsearch version");
             this.esVersion = sender.getElasticSearchVersion();
 
             checkTestMode(context.getParameter(ES_TEST_MODE));
@@ -167,17 +177,24 @@ public class ElasticsearchBackendClient extends AbstractBackendListenerClient {
 
     /**
      * Method that converts a semicolon separated list contained in a parameter into a string set
+     *
      * @param context
      * @param parameter
      * @param set
      */
     private void convertParameterToSet(BackendListenerContext context, String parameter, Set<String> set) {
-        String[] array = (context.getParameter(parameter).contains(";")) ? context.getParameter(parameter).split(";")
-                : new String[] { context.getParameter(parameter) };
+        String value = context.getParameter(parameter);
+
+        convertValueToSet(parameter, set, value);
+    }
+
+    private static void convertValueToSet(String parameter, Set<String> set, String value) {
+        String[] array = (value.contains(";")) ? value.split(";")
+                : new String[]{value};
         if (array.length > 0 && !array[0].trim().equals("")) {
             for (String entry : array) {
                 set.add(entry.toLowerCase().trim());
-                if(logger.isDebugEnabled())
+                if (logger.isDebugEnabled())
                     logger.debug("Parsed from " + parameter + ": " + entry.toLowerCase().trim());
             }
         }
@@ -185,6 +202,7 @@ public class ElasticsearchBackendClient extends AbstractBackendListenerClient {
 
     /**
      * Method that sets the SSL configuration to be able to send requests to a secured endpoint
+     *
      * @param context
      */
     private void setSSLConfiguration(BackendListenerContext context) {
@@ -228,6 +246,16 @@ public class ElasticsearchBackendClient extends AbstractBackendListenerClient {
 
     @Override
     public void handleSampleResults(List<SampleResult> results, BackendListenerContext context) {
+        if (results.isEmpty()) {
+            logger.warn("There are no sampler results to handle!");
+            return;
+        }
+
+        List<String> paramNames = new ArrayList<>();
+        context.getParameterNamesIterator().forEachRemaining(paramNames::add);
+        // paramNames.stream().sorted().forEach(name -> logger.debug("Parameter: {} = {}", name, context.getParameter(name)));
+
+        final String filtersAsString = (this.filters.isEmpty()) ? "no filters" : String.join(", ", this.filters);
         for (SampleResult sr : results) {
             ElasticSearchMetric metric = new ElasticSearchMetric(sr, context.getParameter(ES_TEST_MODE),
                     context.getParameter(ES_TIMESTAMP), this.buildNumber,
@@ -242,6 +270,9 @@ public class ElasticsearchBackendClient extends AbstractBackendListenerClient {
                             "The ElasticSearch Backend Listener was unable to add sampler to the list of samplers to send... More info in JMeter's console.");
                     e.printStackTrace();
                 }
+                logger.debug("Sampler result processed {} with filters {} (ES_SAMPLE_FILTER {})", sr.getSampleLabel(), filtersAsString, context.getParameter(ES_SAMPLE_FILTER));
+            } else {
+                logger.debug("Sampler result skipped {} with filters {} (ES_SAMPLE_FILTER {})", sr.getSampleLabel(), filtersAsString, context.getParameter(ES_SAMPLE_FILTER));
             }
         }
 
@@ -249,7 +280,7 @@ public class ElasticsearchBackendClient extends AbstractBackendListenerClient {
             try {
                 this.sender.sendRequest(this.esVersion);
             } catch (Exception e) {
-                logger.error("Error occured while sending bulk request.", e);
+                logger.error("Error occurred while sending bulk request.", e);
             } finally {
                 this.sender.clearList();
             }
@@ -267,9 +298,8 @@ public class ElasticsearchBackendClient extends AbstractBackendListenerClient {
 
     /**
      * This method checks if the test mode is valid
-     * 
-     * @param mode
-     *            The test mode as String
+     *
+     * @param mode The test mode as String
      */
     private void checkTestMode(String mode) {
         if (!this.modes.contains(mode)) {
@@ -285,26 +315,28 @@ public class ElasticsearchBackendClient extends AbstractBackendListenerClient {
 
     /**
      * This method will validate the current sample to see if it is part of the filters or not.
-     * 
-     * @param context
-     *            The Backend Listener's context
-     * @param sr
-     *            The current SampleResult
-     * @return true or false depending on whether or not the sample is valid
+     *
+     * @param context The Backend Listener's context
+     * @param sr      The current SampleResult
+     * @return true or false depending on whether the sample is valid
      */
     private boolean validateSample(BackendListenerContext context, SampleResult sr) {
         boolean valid = true;
         String sampleLabel = sr.getSampleLabel().toLowerCase().trim();
 
-        if (this.filters.size() > 0) {
+        if (!this.filters.isEmpty()) {
             for (String filter : filters) {
-                Pattern pattern = Pattern.compile(filter);
+                Pattern pattern = Pattern.compile(String.format(".*%s.*", filter));
                 Matcher matcher = pattern.matcher(sampleLabel);
 
-                if (!sampleLabel.startsWith("!!") && (sampleLabel.contains(filter) || matcher.find())) {
-                    valid = true;
+                if (matcher.find()) {
+                    // README.md#Features*Filters
+                    // You can also choose to exclude certain samplers; `!!exclude_this;filter1;filter2`
+                    valid = !sampleLabel.startsWith("!!");
                     break;
                 } else {
+                    logger.warn(String.format("Filter out sample label %s, it may start with '!!' or it may not match the filter %s. " +
+                            "Check the %s property value in the JMX file. Leave it empty to increase validation", sampleLabel, filter, ES_SAMPLE_FILTER));
                     valid = false;
                 }
             }

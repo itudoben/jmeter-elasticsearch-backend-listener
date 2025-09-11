@@ -1,7 +1,6 @@
 [![Codacy Badge](https://api.codacy.com/project/badge/Grade/8a2f2a06171248acb6411a2d870558c8)](https://app.codacy.com/app/antho325/jmeter-elasticsearch-backend-listener?utm_source=github.com&utm_medium=referral&utm_content=delirius325/jmeter-elasticsearch-backend-listener&utm_campaign=Badge_Grade_Dashboard)
 [![Build Status](https://travis-ci.org/delirius325/jmeter-elasticsearch-backend-listener.svg?branch=master)](https://travis-ci.org/delirius325/jmeter-elasticsearch-backend-listener)
 
-
 # Overview
 ### Description
 JMeter ElasticSearch Backend Listener is a JMeter plugin enabling you to send test results to an ElasticSearch engine. It is meant as an alternative live-monitoring tool to the built-in "InfluxDB" backend listener of JMeter. 
@@ -11,12 +10,13 @@ JMeter ElasticSearch Backend Listener is a JMeter plugin enabling you to send te
 * ElasticSearch low-level REST client
   * Using the low-level client makes the plugin compatible with any ElasticSearch version
 * X-Pack Authentication!
-  * Just supply your crendentials in the specified fields!
+  * Just supply your credentials in the specified fields!
 * Bulk requests
   * By making bulk requests, there are practically no impacts on the performance of the tests themselves. 
 * Filters
   * Only send the samples you want by using Filters! Simply type them as follows in the field ``es.sample.filter`` : ``filter1;filter2;filter3`` or ``sampleLabel_must_contain_this``.
   * You can also choose to exclude certain samplers; `!!exclude_this;filter1;filter2`
+  * SYS_DYNAMIC_ES_PER_SAMPLE_FILTER is a System property that can be set before the ElasticsearchBackendClient#handleSampleResults(...) is called. It will override the es.sample.filter value set in the backendlistener configuration.
 * Specific fields ```field1;field2;field3`
   * Specify fields that you want to send to ElasticSearch (possible fields below)
      * AllThreads
@@ -47,7 +47,7 @@ JMeter ElasticSearch Backend Listener is a JMeter plugin enabling you to send te
   * __info__ : Sends all samplers to the ElasticSearch engine, but only sends the headers, body info for the failed samplers.
   * __quiet__ : Only sends the response time, bytes, and other metrics
   * __error__ : Only sends the failing samplers to the ElasticSearch engine (Along with their headers and body information).
-* Use either Kibana or Grafana to vizualize your results!
+* Use either Kibana or Grafana to visualize your results!
   * [Click here to get a sample Grafana dashboard!](https://github.com/delirius325/jmeter-elasticsearch-backend-listener/wiki/JMeter-Generic-Dashboard) - All you need to do is import it into Grafana and change the data source!
 * Continuous Integration support - [Build comparison!](https://github.com/delirius325/jmeter-elasticsearch-backend-listener/wiki/Continuous-Integration---Build-Comparison)
 * Send JMeter variables to ElasticSearch! [Refer to this for more info!](https://github.com/delirius325/jmeter-elasticsearch-backend-listener/wiki/Sending-JMeter-variables) 
